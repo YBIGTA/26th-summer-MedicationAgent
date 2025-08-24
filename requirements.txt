@@ -1,7 +1,18 @@
-langchain>=0.2.10
-langchain-openai>=0.1.7
-openai>=1.40.0
-streamlit>=1.36.0
-python-dotenv>=1.0.1
-pydantic>=2.7.4
+# FastAPI + Gunicorn (Cloud Run 필수)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+gunicorn==21.2.0
+pydantic==2.5.0
 
+# 데이터베이스
+psycopg[binary]==3.1.18
+
+# 벡터 검색
+qdrant-client==1.7.0
+
+# AI/ML
+openai>=1.30.0
+
+# 유틸리티
+python-dotenv==1.0.0
+httpx>=0.20.0
