@@ -604,7 +604,7 @@ def create_agent():
         temperature=0.1,
         api_key=os.getenv("OPENAI_API_KEY")
     )
-    
+        
     # Tools
     tools = [
         search_drug_info, 
@@ -718,6 +718,8 @@ def add_message(role: str, content: str, sources: List[Dict] = None):
 def parse_medication_info(user_input: str) -> Optional[Dict[str, Any]]:
     """사용자 입력에서 복약 정보를 파싱하는 함수"""
     try:
+        today = datetime.now().date().isoformat()
+
         # OpenAI LLM을 사용하여 복약 정보 구조화
         llm = ChatOpenAI(
             model="gpt-3.5-turbo",
@@ -728,6 +730,14 @@ def parse_medication_info(user_input: str) -> Optional[Dict[str, Any]]:
         prompt = f"""
 다음 사용자 입력에서 복약 정보를 추출하여 JSON 형태로 반환해주세요.
 복약 정보가 없다면 null을 반환하세요.
+
+**중요**: 
+- "오늘부터", "오늘부터 시작" 등의 표현이 있으면 start_date를 "{today}"로 설정하세요
+- "내일부터", "다음 주부터" 등의 표현이 있으면 해당 날짜를 계산하여 설정하세요
+- 날짜가 명시되지 않았으면 start_date를 "{today}"로 설정하세요
+- "타이레놀이 뭐야?", "아스피린 효능" 등은 약물 정보 질문이지 복약 정보가 아닙니다
+- 복약 정보는 "나 매끼 식전에 판테놀 먹어야 해", "오늘부터 타이레놀 복용" 등입니다
+- 확실하지 않으면 is_medication을 false로 설정하세요
 
 입력: {user_input}
 
@@ -755,6 +765,17 @@ def parse_medication_info(user_input: str) -> Optional[Dict[str, Any]]:
             json_match = re.search(r'\{.*\}', response, re.DOTALL)
             if json_match:
                 parsed = json.loads(json_match.group())
+
+                # LLM 응답 후 추가 검증
+                if parsed and parsed.get('is_medication'):
+                    # "오늘부터" 등의 표현이 있으면 오늘 날짜로 강제 설정
+                    if any(keyword in user_input for keyword in ["오늘부터", "오늘부터 시작", "오늘부터 복용"]):
+                        parsed['start_date'] = today
+                    
+                    # 시작일이 없으면 오늘 날짜로 설정
+                    if not parsed.get('start_date'):
+                        parsed['start_date'] = today
+
                 return parsed
             else:
                 return None
@@ -1164,13 +1185,13 @@ def reindex_qdrant_data():
                             collection_name="product_sections",
                             points=[{
                                 "id": f"{item.get('itemSeq', '')}_{section_name}_{uploaded_count}",
-                                "vector": vector,
-                                "payload": {
+                            "vector": vector,
+                            "payload": {
                                     "text": section_text,
                                     "item_name": item.get('itemName', ''),
                                     "entp_name": item.get('entpName', ''),
                                     "section": section_name,
-                                    "section_name": section_name,
+                                "section_name": section_name,
                                     "aliases": item.get('aliases', []),
                                     "ingredients": item.get('ingredients', []),
                                     "update_de": item.get('updateDe', ''),
@@ -1202,7 +1223,6 @@ def main():
     
     # 헤더
     st.markdown('<h1 class="main-header">💊 Medication Agent</h1>', unsafe_allow_html=True)
-    st.markdown("### 🤖 Tool 기반 AI 약물 정보 챗봇 + 복약 체크리스트")
     
     # 사이드바
     with st.sidebar:
@@ -1224,13 +1244,19 @@ def main():
                         user = med_db.get_or_create_user(username, email)
                         if user:
                             st.session_state.current_user = user
-                            st.success(f"✅ {username}으로 로그인되었습니다!")
+                            st.success(f"✅ {username}(으)로 로그인되었습니다!")
                             st.rerun()
+                        else:
+                            st.error("사용자명을 입력해주세요.")
                     else:
                         st.error("사용자명을 입력해주세요.")
+
         else:
-            st.success(f"✅ {st.session_state.current_user['name']}으로 로그인됨")
-            
+            if st.session_state.current_user and 'name' in st.session_state.current_user:
+                st.success(f"✅ {st.session_state.current_user['name']}(으)로 로그인됨")
+            else:
+                st.success("✅ 로그인됨")
+
             if st.button("🚪 로그아웃"):
                 st.session_state.current_user = None
                 st.rerun()
@@ -1254,7 +1280,7 @@ def main():
         
         # 복약 체크리스트 관리
         if st.session_state.current_user:
-            st.subheader("💊 복약 체크리스트")
+            st.subheader("💊 복약 리스트")
             
             user_medications = med_db.get_user_medications(st.session_state.current_user['id'])
             
@@ -1301,14 +1327,6 @@ def main():
         
         st.markdown("---")
         
-        # 검색 옵션
-        st.subheader("검색 옵션")
-        
-        # 결과 수 설정
-        k = st.slider("📊 검색 결과 수", 1, 10, 3)
-        
-        st.markdown("---")
-        
         # 대화 초기화
         if st.button("🗑️ 대화 초기화", type="secondary"):
             st.session_state.messages = []
@@ -1318,55 +1336,6 @@ def main():
         
         st.markdown("---")
         
-        # 시스템 상태
-        st.subheader("📊 시스템 상태")
-        
-        # LangChain 초기화 상태 확인
-        try:
-            qa_chain, vectorstore = initialize_langchain()
-            if qa_chain:
-                st.success("✅ Tool Agent 정상")
-            else:
-                st.error("❌ Tool Agent 초기화 실패")
-        except Exception as e:
-            st.error(f"❌ 연결 오류: {str(e)}")
-        
-        # Qdrant 데이터 확인 버튼
-        if st.button("🔍 Qdrant 데이터 확인", type="secondary"):
-            check_qdrant_data()
-        
-        # DB 초기화 버튼
-        if st.button("🗄️ DB 초기화", type="secondary"):
-            initialize_qdrant_db()
-        
-        # 재인덱싱 버튼
-        if st.button("🔄 데이터 재인덱싱", type="secondary"):
-            reindex_qdrant_data()
-        
-        st.markdown("---")
-        st.subheader("📅 스케줄 파일")
-        
-        # 스케줄 파일 목록 표시
-        if os.path.exists(EXPORT_DIR):
-            files = [f for f in os.listdir(EXPORT_DIR) if f.endswith(('.json', '.ics'))]
-            if files:
-                st.write(f"📁 생성된 파일: {len(files)}개")
-                with st.expander("📋 파일 목록"):
-                    for file in sorted(files, reverse=True)[:10]:  # 최근 10개만
-                        file_path = os.path.join(EXPORT_DIR, file)
-                        file_size = os.path.getsize(file_path)
-                        st.write(f"📄 {file} ({file_size} bytes)")
-            else:
-                st.info("📁 아직 생성된 스케줄 파일이 없습니다.")
-        else:
-            st.info("📁 스케줄 파일 폴더가 아직 생성되지 않았습니다.")
-        
-        # 폴더 열기 버튼
-        if st.button("📂 스케줄 폴더 열기", type="secondary"):
-            if os.path.exists(EXPORT_DIR):
-                st.success(f"📂 폴더 경로: {os.path.abspath(EXPORT_DIR)}")
-            else:
-                st.info("📁 아직 스케줄 파일이 생성되지 않았습니다.")
     
     # 메인 채팅 영역
     col1, col2 = st.columns([3, 1])
@@ -1410,11 +1379,8 @@ def main():
                         
                         if med_db.update_medication(med['id'], update_data):
                             del st.session_state.editing_medication
-                            st.rerun()
-                    
-                    if st.button("❌ 취소"):
-                        del st.session_state.editing_medication
-                        st.rerun()
+                st.rerun()
+    
         
         # 복약 정보 예시가 있으면 자동으로 전송
         if 'example_medication' in st.session_state and st.session_state.example_medication:
@@ -1435,145 +1401,111 @@ def main():
                 add_message("assistant", ai_response, sources)
                 del st.session_state.example_medication
                 st.rerun()
-        # 채팅 메시지 표시
-        for i, message in enumerate(st.session_state.messages):
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-                
-                # 복약 정보 확인 메시지인 경우 확인 버튼 표시
-                if (message["role"] == "assistant" and 
-                    "복약 정보 확인" in message["content"] and
-                    st.session_state.pending_medication_confirmation):
-                    
-                    st.markdown("---")
-                    col_confirm1, col_confirm2 = st.columns(2)
-                    
-                    with col_confirm1:
-                        if st.button("✅ 확인 - 체크리스트에 추가", key=f"confirm_med_{i}", type="primary"):
-                            # 복약 정보를 DB에 추가
-                            medication_data = st.session_state.pending_medication_confirmation
-                            if med_db.add_medication(st.session_state.current_user['id'], medication_data):
-                                # 메시지 업데이트
-                                st.session_state.messages[i]["content"] = f"✅ **복약 정보가 체크리스트에 추가되었습니다!**\n\n{message['content'].replace('위 정보를 복약 체크리스트에 추가하시겠습니까?', '')}"
-                                st.session_state.pending_medication_confirmation = None
-                                st.rerun()
-                    
-                    with col_confirm2:
-                        if st.button("❌ 취소", key=f"cancel_med_{i}"):
-                            # 메시지 업데이트
-                            st.session_state.messages[i]["content"] = f"❌ **복약 정보 추가가 취소되었습니다.**\n\n{message['content'].replace('위 정보를 복약 체크리스트에 추가하시겠습니까?', '')}"
-                            st.session_state.pending_medication_confirmation = None
-                            st.rerun()
+
+        # 채팅 메시지 표시 (ChatGPT 스타일)
+        st.markdown("### 💬 약물 정보 상담")
         
-        # 입력 영역
-        st.markdown("---")
+        # 채팅 컨테이너
+        chat_container = st.container()
         
-        # 질문 입력 필드
-        user_input = st.text_input(
-            "💬 질문을 입력하세요...",
-            placeholder="예: 타이레놀의 효능이 뭔가요? 또는: 나 매끼 식전에 판테놀 먹어야 해",
+        with chat_container:
+            # 기존 메시지들 표시
+            for message in st.session_state.messages:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.write(message["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        st.write(message["content"])
+                        
+                        # 복약 정보 확인 메시지인 경우 확인 버튼 표시
+                        if ("복약 정보 확인" in message["content"] and 
+                            st.session_state.pending_medication_confirmation):
+                            
+                            st.markdown("---")
+                            col_confirm1, col_confirm2 = st.columns(2)
+                            
+                            with col_confirm1:
+                                if st.button("✅ 확인 - 체크리스트에 추가", key=f"confirm_med_{len(st.session_state.messages)}", type="primary"):
+                                    # 복약 정보를 DB에 추가
+                                    medication_data = st.session_state.pending_medication_confirmation
+                                    if med_db.add_medication(st.session_state.current_user['id'], medication_data):
+                                        # 메시지 업데이트
+                                        st.session_state.messages[-1]["content"] = f"✅ **복약 정보가 체크리스트에 추가되었습니다!**\n\n{message['content'].replace('위 정보를 복약 체크리스트에 추가하시겠습니까?', '')}"
+                                        st.session_state.pending_medication_confirmation = None
+                                        st.rerun()
+                            
+                            with col_confirm2:
+                                if st.button("❌ 취소", key=f"cancel_med_{len(st.session_state.messages)}"):
+                                    # 메시지 업데이트
+                                    st.session_state.messages[-1]["content"] = f"❌ **복약 정보 추가가 취소되었습니다.**\n\n{message['content'].replace('위 정보를 복약 체크리스트에 추가하시겠습니까?', '')}"
+                                    st.session_state.pending_medication_confirmation = None
+                                    st.rerun()
+        
+        # 입력 영역 (하단 고정)
+                                st.markdown("---")
+        
+        # 질문 입력 필드 (ChatGPT 스타일)
+        user_input = st.chat_input(
+            "💬 약물 정보나 복약 정보를 입력하세요...",
             key="user_input"
         )
         
         # 복약 정보 자동 감지 및 체크리스트 추가
-        if user_input.strip() and st.session_state.current_user:
-            parsed_med = parse_medication_info(user_input)
-            if parsed_med and parsed_med.get('is_medication'):
-                st.session_state.parsed_medication = parsed_med
+        if user_input and st.session_state.current_user:
+            
+            # 1단계: 먼저 스마트 에이전트로 분류
+            with st.spinner("🤖 스마트 에이전트 분석 중..."):
+                result = smart_agent_response(user_input, med_db, st.session_state.current_user, st.session_state.conversation_id)
+            
+            # 2단계: 사용자 메시지 추가
+            add_message("user", user_input)
+            
+            # 3단계: AI 응답 추가
+            if result["success"]:
+                ai_response = result["message"]
+                sources = result.get("sources", [])
                 
-                with st.expander("💊 복약 정보 감지됨", expanded=True):
-                    st.write(f"**약물명:** {parsed_med['medication_name']}")
-                    
-                    times = []
-                    if parsed_med.get('morning'):
-                        times.append("아침")
-                    if parsed_med.get('lunch'):
-                        times.append("점심")
-                    if parsed_med.get('dinner'):
-                        times.append("저녁")
-                    if times:
-                        st.write(f"**복용 시간:** {', '.join(times)}")
-                    
-                    meal_timing = []
-                    if parsed_med.get('before_meal'):
-                        meal_timing.append("식전")
-                    if parsed_med.get('after_meal'):
-                        meal_timing.append("식후")
-                    if meal_timing:
-                        st.write(f"**식사 타이밍:** {', '.join(meal_timing)}")
-                    
-                    if parsed_med.get('start_date'):
-                        st.write(f"**시작일:** {parsed_med['start_date']}")
-                    if parsed_med.get('end_date'):
-                        st.write(f"**종료일:** {parsed_med['end_date']}")
+                # 복약 정보 확인이 필요한 경우 세션 상태 설정
+                if result["type"] == "medication_info_confirm" and result.get("needs_confirmation"):
+                    st.session_state.pending_medication_confirmation = result.get("medication")
+                
+                if result["type"] == "medication_question":
+                    st.session_state.chat_history = result.get("chat_history", [])
+                    st.session_state.conversation_id = result.get("conversation_id", st.session_state.conversation_id)
+            else:
+                ai_response = result["message"]
+                sources = []
+            
+            # AI 메시지 추가
+            add_message("assistant", ai_response, sources)
+            
+            # 4단계: 복약 정보 확인 UI 표시 (필요한 경우에만)
+            if (result["type"] == "medication_info_confirm" and 
+                result.get("needs_confirmation") and 
+                result.get("medication")):
+                
+                medication_data = result.get("medication")
+                
+                with st.expander("💊 복약 정보 확인", expanded=True):
+                    # ... 복약 정보 표시 ...
                     
                     col_a, col_b = st.columns(2)
                     with col_a:
                         if st.button("✅ 체크리스트에 추가", key="add_to_checklist", type="primary"):
-                            if med_db.add_medication(st.session_state.current_user['id'], parsed_med):
+                            if med_db.add_medication(st.session_state.current_user['id'], medication_data):
                                 st.session_state.parsed_medication = {}
                                 st.rerun()
                     
                     with col_b:
                         if st.button("❌ 추가하지 않음", key="dont_add"):
                             st.session_state.parsed_medication = {}
-                            st.rerun()
-        
-        # 전송 버튼
-        col_a, col_b, col_c = st.columns([1, 1, 1])
-        
-        with col_a:
-            if st.button("🚀 전송", type="primary", use_container_width=True):
-                if user_input.strip():
-                    # 사용자 메시지 추가
-                    add_message("user", user_input)
-                    
-                    # 스마트 에이전트 실행
-                    with st.spinner("🤖 스마트 에이전트 분석 중..."):
-                        if st.session_state.current_user:
-                            result = smart_agent_response(user_input, med_db, st.session_state.current_user, st.session_state.conversation_id)
-                        else:
-                            result = process_medication_question(user_input, st.session_state.conversation_id)
-                        
-                        if result["success"]:
-                            ai_response = result["message"]
-                            sources = result.get("sources", [])
-                            
-                            # 복약 정보 확인이 필요한 경우 세션 상태 설정
-                            if result["type"] == "medication_info_confirm" and result.get("needs_confirmation"):
-                                st.session_state.pending_medication_confirmation = result.get("medication")
-                            
-                            if result["type"] == "medication_question":
-                                st.session_state.chat_history = result.get("chat_history", [])
-                                st.session_state.conversation_id = result.get("conversation_id", st.session_state.conversation_id)
-                            else:
-                                ai_response = result["message"]
-                                sources = []
-                        else:
-                            ai_response = result["message"]
-                            sources = []
-                    
-                    # AI 메시지 추가
-                    add_message("assistant", ai_response, sources)
-                    
-                    # 페이지 새로고침
-                    st.rerun()
-                else:
-                    st.error("질문을 입력해주세요.")
-        
-        with col_c:
-            st.write("")  # 빈 공간
-    
+            
+            # 5단계: 페이지 새로고침
+            st.rerun()
+                
     with col2:
-        st.markdown("### 📈 대화 통계")
-        st.metric("총 메시지", len(st.session_state.messages))
-        st.metric("사용자 메시지", len([m for m in st.session_state.messages if m["role"] == "user"]))
-        st.metric("AI 응답", len([m for m in st.session_state.messages if m["role"] == "assistant"]))
-        
-        st.markdown("---")
-        
         if st.session_state.current_user:
-            st.markdown("### 💊 복약 현황")
             
             user_medications = med_db.get_user_medications(st.session_state.current_user['id'])
             
@@ -1593,24 +1525,10 @@ def main():
                         if med['morning'] or med['lunch'] or med['dinner']:
                             today_meds += 1
                 
-                st.metric("총 복약", total)
-                st.metric("오늘 복용", today_meds)
             else:
                 st.info("복약 체크리스트가 비어있습니다.")
-        
-        st.markdown("---")
-        
-        st.markdown("### 💬 채팅 히스토리")
-        st.metric("대화 세션", st.session_state.conversation_id)
-        st.metric("히스토리 길이", len(st.session_state.chat_history))
-        
-        # 최근 대화 미리보기
-        if st.session_state.chat_history:
-            with st.expander("📝 최근 대화 미리보기"):
-                for i, msg in enumerate(st.session_state.chat_history[-3:], 1):
-                    st.markdown(f"**{i}. 사용자:** {msg['user'][:50]}...")
-                    st.markdown(f"**AI:** {msg['assistant'][:50]}...")
-                    st.markdown("---")
+
+    
 
 if __name__ == "__main__":
     main()

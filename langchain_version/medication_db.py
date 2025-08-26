@@ -40,7 +40,6 @@ class MedicationDatabase:
             }
             
             self.conn = psycopg2.connect(**conn_params)
-            st.success("✅ Supabase PostgreSQL 연결 성공!")
         except Exception as e:
             st.error(f"❌ 데이터베이스 연결 실패: {e}")
             return
