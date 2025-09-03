@@ -1,216 +1,213 @@
-# 💊 Medication Agent
+# 💊 Medication Agent - AI 기반 약물 정보 챗봇
 
-식약처 공공데이터 기반의 약물 정보 검색 및 질의응답 시스템
+AI와 LangChain을 활용한 한국 약물 정보 검색 및 복약 관리 시스템입니다. 사용자가 약물에 대한 질문을 하면 AI가 약물 데이터베이스를 검색하여 정확한 정보를 제공하고, 개인별 복약 일정을 관리할 수 있습니다.
 
 ## 🚀 주요 기능
 
-- **의미론적 검색**: OpenAI 임베딩을 통한 자연어 기반 약물 정보 검색
-- **구조화된 데이터**: PostgreSQL을 통한 관계형 데이터 관리
-- **벡터 검색**: Qdrant를 통한 고성능 벡터 유사도 검색
-- **RAG 시스템**: LangChain과 연동한 검색 기반 생성 시스템
-- **REST API**: FastAPI 기반의 검색 API 제공
+### **1. AI 약물 정보 검색**
+- 약물 효능, 용법, 주의사항, 부작용 등 상세 정보 제공
+- 약물 간 상호작용 정보 검색
+- 자연어로 약물 관련 질문에 답변
 
-## 🏗️ 아키텍처
+### **2. 복약 일정 관리**
+- 개인별 복약 체크리스트 생성
+- 식전/식후 복용 시간 설정
+- 주간 복약 일정 캘린더 생성
+- 복약 알림 및 추적
+
+### **3. 모듈화된 아키텍처**
+- **config.py**: 애플리케이션 설정 및 환경변수 관리
+- **langchain_agent.py**: AI 에이전트 및 벡터 검색 시스템
+- **medication_tools.py**: 복약 관리 도구 및 쿼리 분류
+- **ui_components.py**: Streamlit UI 컴포넌트 및 세션 관리
+- **calendar_utils.py**: 캘린더 생성 및 내보내기 기능
+- **medication_db.py**: PostgreSQL 데이터베이스 연동
+
+## 🏗️ 프로젝트 구조
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   FastAPI       │    │   PostgreSQL    │    │     Qdrant      │
-│   (검색 API)     │◄──►│   (구조화 데이터) │◄──►│   (벡터 검색)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Streamlit     │    │   Ingest        │    │   LangChain     │
-│   (웹 UI)       │    │   (데이터 적재)  │    │   (RAG)         │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+📁 Medication Agent
+├── 📁 langchain_version/          # LangChain 기반 구현
+│   ├── app.py                     # 메인 Streamlit 애플리케이션
+│   ├── config.py                  # 애플리케이션 설정 및 상수
+│   ├── langchain_agent.py         # LangChain 에이전트 및 도구 관리
+│   ├── medication_db.py           # PostgreSQL 데이터베이스 관리
+│   ├── medication_tools.py        # 복약 관리 도구 및 쿼리 처리
+│   ├── ui_components.py           # Streamlit UI 컴포넌트
+│   ├── calendar_utils.py          # 캘린더 유틸리티 함수
+│   ├── requirements.txt           # Python 의존성
+│   └── README.md                  # LangChain 버전 상세 설명
+├── 📁 fastapi_version/            # FastAPI 기반 구현 (향후 추가 예정)
+├── 📄 all_drug_data.json          # 한국 약물 정보 데이터베이스
+└── 📄 README.md                   # 프로젝트 전체 개요
 ```
 
-## 📋 요구사항
+## 📋 모듈별 상세 기능
 
-- Python 3.9+
-- PostgreSQL
-- Qdrant Cloud 또는 자체 설치
-- OpenAI API 키
+### **config.py**
+- 환경변수 로드 및 애플리케이션 설정 관리
+- OpenAI, Qdrant, Supabase 연결 정보
+- UI 설정, 프롬프트 템플릿, 에러 메시지 정의
 
-## 🛠️ 설치
+### **langchain_agent.py**
+- OpenAI GPT 모델 및 임베딩 초기화
+- Qdrant 벡터 데이터베이스 연결 및 검색
+- LangChain 에이전트 및 QA 체인 생성
+- 약물 정보 검색 도구 구현
 
-### 1. 저장소 클론
+### **medication_tools.py**
+- 사용자 입력 의도 분류 (추가/조회/수정/삭제/질문/일정)
+- 복약 체크리스트 CRUD 작업
+- AI 에이전트를 통한 쿼리 처리
+- 복약 일정 생성 및 관리
+
+### **ui_components.py**
+- Streamlit 세션 상태 관리
+- 사이드바, 채팅 인터페이스, 폼 UI 렌더링
+- 사용자 인증 및 시스템 초기화
+- 메시지 히스토리 관리
+
+### **calendar_utils.py**
+- AI 응답에서 캘린더 JSON 파싱
+- 주간 복약 일정 이벤트 생성
+- iCal 형식 캘린더 내보내기
+- 시간대 처리 및 날짜 변환
+
+### **medication_db.py**
+- PostgreSQL 데이터베이스 연결 관리
+- 사용자 및 복약 정보 CRUD 작업
+- Supabase 연동 및 데이터 영속성
+
+## 🔧 기술 스택
+
+### **Backend**
+- **Python 3.8+**: 메인 프로그래밍 언어
+- **LangChain**: AI 체인 및 도구 관리
+- **OpenAI GPT**: 자연어 처리 및 응답 생성
+- **Qdrant**: 벡터 데이터베이스 (약물 정보 검색)
+
+### **Frontend**
+- **Streamlit**: 웹 인터페이스
+- **HTML/CSS**: 사용자 인터페이스 스타일링
+
+### **Database**
+- **PostgreSQL**: 사용자 정보 및 복약 데이터 저장
+- **Supabase**: 클라우드 데이터베이스 서비스
+
+### **AI/ML**
+- **OpenAI Embeddings**: 텍스트 벡터화
+- **RAG (Retrieval-Augmented Generation)**: 정확한 정보 검색 및 생성
+
+## 🚀 빠른 시작
+
+### **LangChain 버전 실행**
+
 ```bash
-git clone https://github.com/YBIGTA/26th-summer-MedicationAgent.git
-cd 26th-summer-MedicationAgent
-```
+# 저장소 클론
+git clone [repository-url]
 
-### 2. 환경 설정
-```bash
-# 환경변수 파일 복사
-cp env.sample .env
+# 가상환경 생성 및 활성화
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# .env 파일 편집하여 실제 값 입력
-# PostgreSQL, Qdrant, OpenAI 설정
-```
+# 의존성 설치
+pip install -r langchain_version/requirements.txt
 
-### 3. 패키지 설치
-```bash
-pip install -r requirements.txt
-```
+# 환경변수 설정 (.env 파일 생성)
+QDRANT_URL=your_qdrant_url
+QDRANT_API_KEY=your_qdrant_api_key
+OPENAI_API_KEY=your_openai_api_key
+SUPABASE_DB_URL=your_supabase_db_url
 
-### 4. PostgreSQL 스키마 생성
-```bash
-# PostgreSQL에 연결하여 schema.sql 실행
-psql -h <host> -U <user> -d <database> -f sql/schema.sql
-```
-
-## 🚀 사용법
-
-### 1. 데이터 인제스트
-```bash
-# 환경변수 설정 후
-cd ingest
-python ingest_all_json.py
-```
-
-### 2. API 서버 실행
-```bash
-cd api
-uvicorn server:app --reload
-```
-
-### 3. RAG 데모 실행
-```bash
-cd examples
-python rag_demo.py
-```
-
-### 4. Streamlit 앱 실행
-```bash
+# 애플리케이션 실행
+cd langchain_version
 streamlit run app.py
 ```
 
-## 📊 데이터 구조
+## 📱 사용법
 
-### 섹션 매핑
-- `efcyQesitm` → `efficacy` (효능/효과)
-- `useMethodQesitm` → `dosage` (용법/용량)
-- `atpnWarnQesitm` → `warnings` (주의사항 경고)
-- `atpnQesitm` → `precautions` (주의사항)
-- `intrcQesitm` → `interactions` (상호작용)
-- `seQesitm` → `side_effects` (부작용)
-- `depositMethodQesitm` → `storage` (보관법)
+### **1. 약물 정보 검색**
+- "타이레놀의 효능이 뭔가요?"
+- "와파린과 함께 복용하면 안 되는 약이 있나요?"
+- "아세트아미노펜의 부작용은?"
+- "혈압약 주의사항이 궁금해요"
 
-### 데이터베이스 스키마
-- `products`: 제품 기본 정보
-- `product_sections`: 섹션별 텍스트 데이터
-- `product_aliases`: 제품 별칭
-- `product_ingredients`: 제품 성분
+### **2. 복약 일정 관리**
+- 사용자 계정 생성
+- 복용 중인 약물 정보 입력
+- 식전/식후 복용 시간 설정
+- 주간 복약 일정 확인
 
-## 🔍 API 사용법
+### **3. 캘린더 내보내기**
+- 복약 일정을 iCal 형식으로 내보내기
+- 개인 캘린더 앱에 동기화
 
-### 검색 API
-```bash
-curl -X POST "http://localhost:8000/search" \
-  -H "x-api-key: teammates-read-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "타이레놀 와파린 상호작용",
-    "section": "interactions",
-    "alias": "타이레놀",
-    "k": 5
-  }'
+## 🔍 데이터베이스 스키마
+
+### **Users 테이블**
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-### 사용 가능한 엔드포인트
-- `GET /`: API 정보
-- `GET /health`: 헬스 체크
-- `POST /search`: 약물 검색
-- `GET /sections`: 사용 가능한 섹션 목록
-- `GET /aliases`: 사용 가능한 약물 별칭 목록
-- `GET /ingredients`: 사용 가능한 성분 목록
-
-## 🔧 환경변수
-
-```bash
-# PostgreSQL
-PG_HOST=localhost
-PG_DB=medication_agent
-PG_USER=postgres
-PG_PASSWORD=your_password
-PG_SSLMODE=require
-
-# Qdrant
-QDRANT_URL=https://your-instance.qdrant.tech
-QDRANT_API_KEY=your_qdrant_api_key
-
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
-EMBED_MODEL=text-embedding-3-small
-
-# 게이트웨이
-GATEWAY_READ_KEY=teammates-read-key
-
-# Qdrant 재생성
-RECREATE_QDRANT=false
+### **User Medications 테이블**
+```sql
+CREATE TABLE user_medications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    medication_name VARCHAR(200) NOT NULL,
+    morning BOOLEAN DEFAULT FALSE,
+    lunch BOOLEAN DEFAULT FALSE,
+    dinner BOOLEAN DEFAULT FALSE,
+    before_meal BOOLEAN DEFAULT FALSE,
+    after_meal BOOLEAN DEFAULT FALSE,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-## 📁 프로젝트 구조
+## 🎯 프로젝트 목표
 
-```
-26th-summer-MedicationAgent/
-├── sql/
-│   └── schema.sql              # PostgreSQL 스키마
-├── ingest/
-│   └── ingest_all_json.py      # 데이터 인제스트 스크립트
-├── api/
-│   └── server.py               # FastAPI 서버
-├── examples/
-│   └── rag_demo.py             # LangChain RAG 데모
-├── app.py                      # Streamlit 메인 앱
-├── agent.py                    # LangChain 에이전트
-├── tools.py                    # 검색 도구
-├── data.json                   # 기존 약물 데이터
-├── all_drug_data.json          # 식약처 공공데이터
-├── drug_list.txt               # 약물 목록
-├── requirements.txt             # Python 패키지
-├── env.sample                  # 환경변수 샘플
-└── README.md                   # 프로젝트 문서
-```
+### **1. 정확한 약물 정보 제공**
+- 한국 식약처 공식 약물 정보 활용
+- AI 기반 자연어 검색으로 사용자 편의성 향상
+- 최신 약물 정보 자동 업데이트
 
-## 🧪 테스트
+### **2. 개인화된 복약 관리**
+- 사용자별 맞춤형 복약 일정
+- 복용 시간 알림 및 추적
+- 복약 이력 관리
 
-### 1. 기본 검색 테스트
-```bash
-python examples/rag_demo.py
-```
+### **3. 의료진과의 소통 지원**
+- 복약 정보를 체계적으로 정리
+- 의사 상담 시 참고 자료 제공
+- 복용 중 이상 반응 기록
 
-### 2. API 테스트
-```bash
-# 서버 실행 후
-curl http://localhost:8000/health
-```
+## 🤝 기여하기
 
-### 3. 데이터 적재 확인
-```bash
-# PostgreSQL에서 데이터 확인
-psql -h <host> -U <user> -d <database> -c "SELECT COUNT(*) FROM products;"
-```
-
-## 🤝 기여
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. 이 저장소를 포크합니다
+2. 새로운 기능 브랜치를 생성합니다 (`git checkout -b feature/amazing-feature`)
+3. 변경사항을 커밋합니다 (`git commit -m 'Add some amazing feature'`)
+4. 브랜치에 푸시합니다 (`git push origin feature/amazing-feature`)
+5. Pull Request를 생성합니다
 
 ## 📄 라이선스
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
 
-## 👥 팀
+## ⚠️ 면책 조항
 
-- **YBIGTA 26th Summer Project**
-- 약물 정보 검색 및 질의응답 시스템 개발
+**중요**: 이 애플리케이션은 교육 및 참고 목적으로만 제공됩니다. 의학적 조언이나 진단을 대체할 수 없습니다. 약물 복용과 관련된 모든 결정은 반드시 의사나 약사와 상의하시기 바랍니다.
 
 ## 📞 문의
 
-프로젝트에 대한 문의사항이 있으시면 이슈를 생성해 주세요. 
+프로젝트에 대한 질문이나 제안사항이 있으시면 이슈를 생성해 주세요.
+
+---
+
+**YBIGTA 26기 여름방학 프로젝트**  
